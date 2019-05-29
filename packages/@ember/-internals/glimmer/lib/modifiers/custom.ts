@@ -1,7 +1,8 @@
-import { Factory } from '@ember/-internals/owner';
+import { Factory, Owner } from '@ember/-internals/owner';
 import { Dict, Opaque, Simple } from '@glimmer/interfaces';
 import { Tag } from '@glimmer/reference';
 import { Arguments, CapturedArguments, ModifierManager } from '@glimmer/runtime';
+import { Environment } from '../..';
 
 export interface CustomModifierDefinitionState<ModifierInstance> {
   ModifierClass: Factory<ModifierInstance>;
@@ -42,7 +43,13 @@ export class CustomModifierState<ModifierInstance> {
 
   destroy() {
     const { delegate, modifier, args } = this;
-    delegate.destroyModifier(modifier, args.value());
+
+    const environment = delegate.owner.lookup<Environment>('-environment:main');
+    const { isInteractive } = environment;
+
+    if (isInteractive) {
+      delegate.destroyModifier(modifier, args.value());
+    }
   }
 }
 
@@ -53,6 +60,7 @@ export interface Args {
 }
 
 export interface ModifierManagerDelegate<ModifierInstance> {
+  owner: Owner;
   capabilities: Capabilities;
   createModifier(factory: Opaque, args: Args): ModifierInstance;
   installModifier(instance: ModifierInstance, element: Simple.Element, args: Args): void;
