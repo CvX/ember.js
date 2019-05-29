@@ -1,3 +1,4 @@
+import { getOwner, Owner } from '@ember/-internals/owner';
 import { assert } from '@ember/debug';
 import { DEBUG } from '@glimmer/env';
 import { Opaque, Simple } from '@glimmer/interfaces';
@@ -5,6 +6,8 @@ import { Tag } from '@glimmer/reference';
 import { Arguments, CapturedArguments, ModifierManager } from '@glimmer/runtime';
 import { Destroyable } from '@glimmer/util';
 import buildUntouchableThis from '../utils/untouchable-this';
+import { Environment } from '../..';
+import { DynamicScope } from '../renderer';
 
 const untouchableContext = buildUntouchableThis('`on` modifier');
 
@@ -55,11 +58,13 @@ export class OnModifierState {
   public capture?: boolean;
   public options?: AddEventListenerOptions;
   public shouldUpdate = true;
+  private owner: Owner;
 
-  constructor(element: Element, args: CapturedArguments) {
+  constructor(element: Element, args: CapturedArguments, owner: Owner) {
     this.element = element;
     this.args = args;
     this.tag = args.tag;
+    this.owner = owner;
   }
 
   updateFromArgs() {
@@ -145,9 +150,14 @@ export class OnModifierState {
   }
 
   destroy() {
-    let { element, eventName, callback, options } = this;
+    let { element, eventName, callback, options, owner } = this;
 
-    removeEventListener(element, eventName, callback, options);
+    let environment = owner.lookup<Environment>('-environment:main');
+    let { isInteractive } = environment;
+
+    if (isInteractive) {
+      removeEventListener(element, eventName, callback, options);
+    }
   }
 }
 
@@ -217,10 +227,11 @@ export default class OnModifierManager implements ModifierManager<OnModifierStat
     return { adds, removes };
   }
 
-  create(element: Simple.Element | Element, _state: Opaque, args: Arguments) {
+  create(element: Simple.Element | Element, _state: Opaque, args: Arguments, dynamicScope: DynamicScope) {
     const capturedArgs = args.capture();
+    const owner = dynamicScope.view ? getOwner(dynamicScope.view) : dynamicScope.outletState.value()!.render!.owner;
 
-    return new OnModifierState(<Element>element, capturedArgs);
+    return new OnModifierState(<Element>element, capturedArgs, owner);
   }
 
   getTag({ tag }: OnModifierState): Tag {
